@@ -1352,6 +1352,8 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     char mld_ifname[32];
 #endif
     char *interface_name = NULL;
+    char vlan_ifname[32] = {0};
+    int vlan_id = 0;
 
     RADIO_INDEX_ASSERT(index);
     NULL_PTR_ASSERT(map);
@@ -1435,6 +1437,19 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         }
         memcpy((unsigned char *)&interface->vap_info, (unsigned char *)vap, sizeof(wifi_vap_info_t));
         interface_name = wifi_hal_get_interface_name(interface);
+
+        // VLAN Impl
+        if (vap->vap_mode == wifi_vap_mode_ap) {
+            vlan_id = get_ap_vlan_id(interface_name);
+            wifi_hal_info_print("%s:%d: [TRAFFIC_SEP] intf vlan %d, vlan_get: %d\n", __func__, __LINE__, interface->vlan, vlan_id);
+            interface->vlan = vlan_id;
+            if ( (interface->vlan >=1) || (interface->vlan <=4094) ) {
+                snprintf(vlan_ifname, sizeof(vlan_ifname), "%s.%d", interface_name, interface->vlan);
+                if ( nl80211_add_vlan(interface_name, interface->vlan, vlan_ifname) == 0 ) {
+                    interface_name = vlan_ifname;
+                }
+            }
+        }
 
 #ifdef CONFIG_GENERIC_MLO
         // VAP down removes MLO links, so restrict down of interface to sta mode only
